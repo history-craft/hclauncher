@@ -2,22 +2,29 @@ package com.historycraft.launcher;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
 import org.apache.commons.codec.digest.DigestUtils;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.PrintWriter;
+import java.io.*;
+import java.lang.reflect.Type;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class FileChecksum {
 
-    private File folder;
+    private final File folder;
+    private final Gson gson;
+    private final File modsFile;
 
     public FileChecksum(File folder) {
         this.folder = folder;
+        GsonBuilder gsonBuilder = new GsonBuilder();
+        gsonBuilder.setPrettyPrinting();
+        this.gson = gsonBuilder.create();
+        this.modsFile = new File(this.folder, "mods.json");
     }
 
     public Map<String, String> generate() {
@@ -28,13 +35,34 @@ public class FileChecksum {
         return map;
     }
 
-    public void saveJsonFile() {
-        GsonBuilder gsonBuilder = new GsonBuilder();
-        gsonBuilder.setPrettyPrinting();
-        Gson gson = gsonBuilder.create();
+    public List<String> compare() {
+        List<String> diff = new ArrayList<>();
+        Map<String, String> generated = this.generate();
+        Map<String, String> loaded = this.loadJsonFile();
 
+        for (String file: loaded.keySet()) {
+            String hash = loaded.get(file);
+            String hash2 = generated.get(file);
+            if (!hash.equals(hash2)){
+                diff.add(file);
+            }
+        }
+        return diff;
+    }
+
+
+    public Map<String, String> loadJsonFile() {
         try {
-            File modsFile = new File(this.folder, "mods.json");
+            Type type = new TypeToken<Map<String, String>>(){}.getType();
+            return gson.fromJson(new FileReader(this.modsFile), type);
+        } catch (Exception ex) {
+            Utils.registerException(ex);
+        }
+        return null;
+    }
+
+    public void saveJsonFile() {
+        try {
             if (modsFile.exists()) {
                 modsFile.delete();
             }
@@ -42,7 +70,7 @@ public class FileChecksum {
             writer.print(gson.toJson(this.generate()));
             writer.close();
         } catch (Exception ex) {
-            ex.printStackTrace();
+            Utils.registerException(ex);
         }
     }
 
@@ -56,7 +84,7 @@ public class FileChecksum {
                     String fileName = file.getAbsolutePath().replace(this.folder.getAbsolutePath(),"");
                     map.put(fileName, DigestUtils.md5Hex(is));
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    Utils.registerException(e);
                 }
             }
         }

@@ -43,7 +43,7 @@ public class MinecraftDownloader {
 
             File tlauncherConfigFile = new File(tlauncherConfigFolder, "tlauncher-2.0.properties");
 
-            File tlauncherConfigFileNew = Main.getFileFromResources("tlauncher-2.0.properties");
+            File tlauncherConfigFileNew = Utils.getFileFromResources("tlauncher-2.0.properties");
 
             List<String> allLines = Files.readAllLines(tlauncherConfigFileNew.toPath(), StandardCharsets.UTF_8);
 
