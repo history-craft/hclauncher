@@ -27,33 +27,33 @@ public class FileChecksum {
         this.modsFile = new File(this.folder, "mods.json");
     }
 
-    public Map<String, String> generate() {
-        Map<String, String> map = new HashMap<>();
+    public Map<String, Object> generate() {
+        Map<String, Object> map = new HashMap<>();
         for (String folder : Main.folderToCheck) {
-            map.putAll(verifyFolder(new File(this.folder, folder)));
+            map.put(folder, verifyFolder(new File(this.folder, folder)));
         }
         return map;
     }
 
-    public List<String> compare() {
-        List<String> diff = new ArrayList<>();
-        Map<String, String> generated = this.generate();
-        Map<String, String> loaded = this.loadJsonFile();
+//    public List<String> compare() {
+//        List<String> diff = new ArrayList<>();
+//        Map<String, Object> generated = this.generate();
+//        Map<String, String> loaded = this.loadJsonFile();
+//
+//        for (String file: loaded.keySet()) {
+//            String hash = loaded.get(file);
+//            String hash2 = generated.get(file);
+//            if (!hash.equals(hash2)){
+//                diff.add(file);
+//            }
+//        }
+//        return diff;
+//    }
 
-        for (String file: loaded.keySet()) {
-            String hash = loaded.get(file);
-            String hash2 = generated.get(file);
-            if (!hash.equals(hash2)){
-                diff.add(file);
-            }
-        }
-        return diff;
-    }
 
-
-    public Map<String, String> loadJsonFile() {
+    public Map<String, Object> loadJsonFile() {
         try {
-            Type type = new TypeToken<Map<String, String>>(){}.getType();
+            Type type = new TypeToken<Map<String, Object>>(){}.getType();
             return gson.fromJson(new FileReader(this.modsFile), type);
         } catch (Exception ex) {
             Utils.registerException(ex);
@@ -74,21 +74,24 @@ public class FileChecksum {
         }
     }
 
-    public Map<String, String> verifyFolder(File folder) {
-        Map<String, String> map = new HashMap<>();
+    public Map<String, Object> verifyFolder(File folder) {
+        Map<String, Object> map = new HashMap<>();
         for (File file: folder.listFiles()) {
             if (file.isDirectory()) {
-                map.putAll(verifyFolder(file));
+                map.put(file.getName(), verifyFolder(file));
             } else {
                 try (InputStream is = Files.newInputStream(file.toPath())) {
-                    String fileName = file.getAbsolutePath().replace(this.folder.getAbsolutePath(),"");
-                    map.put(fileName, DigestUtils.md5Hex(is));
+                    map.put(file.getName(), DigestUtils.md5Hex(is));
                 } catch (IOException e) {
                     Utils.registerException(e);
                 }
             }
         }
         return map;
+    }
+
+
+    public static void compareJsonFile(Map<String, Object> map1, Map<String, Object>map2) {
     }
 
 }
