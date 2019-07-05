@@ -8,9 +8,7 @@ import org.apache.commons.codec.digest.DigestUtils;
 import java.io.*;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class FileChecksum {
@@ -19,7 +17,7 @@ public class FileChecksum {
         CHANGED,
         EQUALS,
         ONLY_EXISTS_IN_SERVER,
-        ONLY_EXISTS_IN_CLINT
+        ONLY_EXISTS_IN_CLIENT
     }
 
     private final File folder;
@@ -69,16 +67,21 @@ public class FileChecksum {
 
     public Map<String, Object> verifyFolder(File folder) {
         Map<String, Object> map = new HashMap<>();
-        for (File file: folder.listFiles()) {
-            if (file.isDirectory()) {
-                map.put(file.getName(), verifyFolder(file));
-            } else {
-                try (InputStream is = Files.newInputStream(file.toPath())) {
-                    map.put(file.getName(), DigestUtils.sha256Hex(is));
-                } catch (IOException e) {
-                    Utils.registerException(e);
+       // System.out.println("Verify folder " + folder);
+        if (folder.exists()) {
+            for (File file: folder.listFiles()) {
+                if (file.isDirectory()) {
+                    map.put(file.getName(), verifyFolder(file));
+                } else {
+                    try (InputStream is = Files.newInputStream(file.toPath())) {
+                        map.put(file.getName(), DigestUtils.sha256Hex(is));
+                    } catch (IOException e) {
+                        Utils.registerException(e);
+                    }
                 }
             }
+        } else {
+            //System.out.println("Folder " + folder + " not exists");
         }
         return map;
     }
@@ -92,18 +95,20 @@ public class FileChecksum {
         Map<String, FileDifference> differences = new HashMap<>();
 
         for(String file: server.keySet()) {
-            if (!client.containsKey(file)) {
-                differences.put(parentFolder + "/" + file, FileDifference.ONLY_EXISTS_IN_SERVER);
-                continue;
-            }
+
             Object serverValue = server.get(file);
-            Object clientValue = client.get(file);
+            Object clientValue = null;
+            if (client != null) {
+                clientValue = client.get(file);
+            }
 
             if (serverValue instanceof String) {
-                if (!serverValue.equals(clientValue)) {
+
+                if (client == null || !client.containsKey(file)) {
+                    differences.put(parentFolder + "/" + file, FileDifference.ONLY_EXISTS_IN_SERVER);
+                    continue;
+                } else if (!serverValue.equals(clientValue)) {
                     differences.put(parentFolder + "/" + file, FileDifference.CHANGED);
-                } else {
-                   // differences.put(parentFolder + "/" + file, FileDifference.EQUALS);
                 }
             } else {
                 Map<String, Object> serverMap = (Map<String, Object>) serverValue;
@@ -111,6 +116,16 @@ public class FileChecksum {
                 differences.putAll(compareJsonFile(serverMap, clientMap,parentFolder + "/" + file));
             }
         }
+
+        if (client != null) {
+            for(String file: client.keySet()) {
+                if (!server.containsKey(file)) {
+                    differences.put(parentFolder + "/" + file, FileDifference.ONLY_EXISTS_IN_CLIENT);
+                    continue;
+                }
+            }
+        }
+
 
         return differences;
     }
