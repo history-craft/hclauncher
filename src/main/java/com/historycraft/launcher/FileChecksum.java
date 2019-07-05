@@ -15,6 +15,13 @@ import java.util.Map;
 
 public class FileChecksum {
 
+    public enum FileDifference{
+        CHANGED,
+        EQUALS,
+        ONLY_EXISTS_IN_SERVER,
+        ONLY_EXISTS_IN_CLINT
+    }
+
     private final File folder;
     private final Gson gson;
     private final File modsFile;
@@ -35,20 +42,6 @@ public class FileChecksum {
         return map;
     }
 
-//    public List<String> compare() {
-//        List<String> diff = new ArrayList<>();
-//        Map<String, Object> generated = this.generate();
-//        Map<String, String> loaded = this.loadJsonFile();
-//
-//        for (String file: loaded.keySet()) {
-//            String hash = loaded.get(file);
-//            String hash2 = generated.get(file);
-//            if (!hash.equals(hash2)){
-//                diff.add(file);
-//            }
-//        }
-//        return diff;
-//    }
 
 
     public Map<String, Object> loadJsonFile() {
@@ -81,7 +74,7 @@ public class FileChecksum {
                 map.put(file.getName(), verifyFolder(file));
             } else {
                 try (InputStream is = Files.newInputStream(file.toPath())) {
-                    map.put(file.getName(), DigestUtils.md5Hex(is));
+                    map.put(file.getName(), DigestUtils.sha256Hex(is));
                 } catch (IOException e) {
                     Utils.registerException(e);
                 }
@@ -90,8 +83,76 @@ public class FileChecksum {
         return map;
     }
 
+    public static Map<String, FileDifference> compareJsonFile(Map<String, Object> server, Map<String, Object> client) {
+        return compareJsonFile(server, client, "");
+    }
 
-    public static void compareJsonFile(Map<String, Object> map1, Map<String, Object>map2) {
+
+    public static Map<String, FileDifference> compareJsonFile(Map<String, Object> server, Map<String, Object> client, String parentFolder) {
+        Map<String, FileDifference> differences = new HashMap<>();
+
+        for(String file: server.keySet()) {
+            if (!client.containsKey(file)) {
+                differences.put(parentFolder + "/" + file, FileDifference.ONLY_EXISTS_IN_SERVER);
+                continue;
+            }
+            Object serverValue = server.get(file);
+            Object clientValue = client.get(file);
+
+            if (serverValue instanceof String) {
+                if (!serverValue.equals(clientValue)) {
+                    differences.put(parentFolder + "/" + file, FileDifference.CHANGED);
+                } else {
+                   // differences.put(parentFolder + "/" + file, FileDifference.EQUALS);
+                }
+            } else {
+                Map<String, Object> serverMap = (Map<String, Object>) serverValue;
+                Map<String, Object> clientMap = (Map<String, Object>) clientValue;
+                differences.putAll(compareJsonFile(serverMap, clientMap,parentFolder + "/" + file));
+            }
+        }
+
+        return differences;
     }
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

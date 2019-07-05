@@ -15,6 +15,12 @@ public class MinecraftDownloader {
 
     public void download() {
         try {
+
+            if (Main.minecraftFolder.exists()) {
+                System.out.println("Minecraft folder exists, skip download client");
+                return;
+            }
+
             BufferedInputStream bis = new BufferedInputStream(new URL(Main.urlMinecraft).openStream());
 
 
