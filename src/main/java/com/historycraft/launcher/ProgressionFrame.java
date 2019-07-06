@@ -1,8 +1,6 @@
 package com.historycraft.launcher;
 
 import javax.swing.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 
 public class ProgressionFrame extends JFrame {
 
@@ -26,9 +24,16 @@ public class ProgressionFrame extends JFrame {
     public void setProcessName(final String processName) {
         SwingUtilities.invokeLater(() -> {
             progressName.setText(processName);
+           // progressBar.setValue(progressBar.getMinimum());
+        });
+    }
+
+    public void reset() {
+        SwingUtilities.invokeLater(() -> {
             progressBar.setValue(progressBar.getMinimum());
         });
     }
+
 
     public void setMaximum(final Integer maximum) {
         SwingUtilities.invokeLater(() -> progressBar.setMaximum(maximum));

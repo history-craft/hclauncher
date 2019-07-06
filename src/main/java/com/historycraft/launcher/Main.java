@@ -7,9 +7,15 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.commons.io.FileUtils;
 
+import javax.print.attribute.standard.DialogTypeSelection;
+import javax.swing.*;
+import java.awt.*;
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileReader;
+import java.io.PrintWriter;
 import java.net.URL;
+import java.util.Calendar;
 import java.util.Map;
 
 public class Main {
@@ -25,13 +31,8 @@ public class Main {
 
     public static void main(String[] args) {
 
-        System.out.println(args);
-        System.out.println(minecraftFolder);
-        System.out.println(tempFolder);
-
         if (args.length >= 2) {
             System.out.println("Doing server stuffs");
-            // param: -server C:\Users\paulo\Desktop\serv-copiado\
             File serverFolder = new File(args[1]);
             FileChecksum fServer = new FileChecksum(serverFolder);
             System.out.println("Generating checksum");
@@ -39,6 +40,47 @@ public class Main {
             System.out.println("Checksum successfully generated");
             return;
         }
+
+        LocalConfig localConfig = null;
+
+        try{
+            File folderConfig = new File(appDatFolder, ".hclauncher");
+            if (!folderConfig.exists()) {
+                folderConfig.mkdirs();
+            }
+            File configFile = new File(folderConfig, "hclauncher.json");
+            GsonBuilder gsonBuilder = new GsonBuilder();
+            gsonBuilder.setPrettyPrinting();
+            Gson gson = gsonBuilder.create();
+
+            if (configFile.exists()) {
+                localConfig = gson.fromJson(new FileReader(configFile), LocalConfig.class);
+            } else {
+                localConfig = new LocalConfig();
+                int dialogResult = JOptionPane.showConfirmDialog (null, "Do you want to use tlauncher?","Warning",JOptionPane.YES_NO_OPTION);
+                localConfig.setUseTlauncher(dialogResult == JOptionPane.YES_OPTION);
+                if (!localConfig.isUseTlauncher()){
+                    FileDialog dialog = new FileDialog((Frame)null, "Select Minecraft launcher");
+                    dialog.setMode(FileDialog.LOAD);
+                    dialog.setVisible(true);
+                    localConfig.setCustomLauncher(new File(dialog.getDirectory(), dialog.getFile()).getAbsolutePath());
+                    dialog.dispose();
+                }
+
+                PrintWriter writer = new PrintWriter(configFile);
+                writer.print(gson.toJson(localConfig, LocalConfig.class));
+                writer.close();
+            }
+        } catch (Exception ex) {
+            Utils.registerException(ex);
+        }
+
+        progressionFrame = new ProgressionFrame();
+        progressionFrame.init();
+        progressionFrame.setProcessName("Download configuration file");
+        progressionFrame.reset();
+        progressionFrame.setMaximum(2);
+        progressionFrame.incrementValue();
 
         try{
             BufferedInputStream bis = new BufferedInputStream(new URL(Main.serverURL + "/launcher-config.json").openStream());
@@ -50,18 +92,14 @@ public class Main {
             Utils.registerException(ex);
         }
 
-        progressionFrame = new ProgressionFrame();
-        progressionFrame.init();
+        progressionFrame.incrementValue();
 
         MinecraftDownloader downloader = new MinecraftDownloader();
         try {
             downloader.download();
-            progressionFrame.setProcessName("Extract files");
-            progressionFrame.setMaximum(2);
             downloader.extract();
-            progressionFrame.incrementValue();
-            downloader.configureLauncher();
-            progressionFrame.incrementValue();
+            if (localConfig.isUseTlauncher())
+                downloader.configureLauncher();
         } catch (Exception ex) {
             Utils.registerException(ex);
             System.exit(1);
@@ -78,16 +116,18 @@ public class Main {
             Utils.registerException(ex);
         }
 
-        FileChecksum fileChecksum = new FileChecksum(minecraftFolder);
+        if (configLauncher != null) {
 
-        Map<String, FileChecksum.FileDifference> map = FileChecksum.compareJsonFile(fileChecksum.loadJsonFile(), fileChecksum.generate());
+            FileChecksum fileChecksum = new FileChecksum(minecraftFolder);
 
-        progressionFrame.setProcessName("Download modpack files");
-        progressionFrame.setMaximum(map.keySet().size());
+            Map<String, FileChecksum.FileDifference> map = FileChecksum.compareJsonFile(fileChecksum.loadJsonFile(), fileChecksum.generate());
 
-        for(String file: map.keySet()) {
-            progressionFrame.incrementValue();
-            if (!map.get(file).equals(FileChecksum.FileDifference.ONLY_EXISTS_IN_CLIENT)) {
+            progressionFrame.setProcessName("Download modpack files");
+            Main.progressionFrame.reset();
+            progressionFrame.setMaximum(map.keySet().size());
+
+            for(String file: map.keySet()) {
+                progressionFrame.incrementValue();
                 boolean found = false;
                 for (String ignored : configLauncher.getIgnoredFiles()){
                     if (file.contains(ignored)) {
@@ -98,18 +138,41 @@ public class Main {
                 if (found) {
                     continue;
                 }
-                try{
-                    File clientFile = new File(minecraftFolder, file);
-                    System.out.println("Trying to download: " + file);
-                    BufferedInputStream bis = new BufferedInputStream(new URL(UrlEscapers.urlFragmentEscaper().escape(Main.serverURL + file)).openStream());
-                    FileUtils.copyInputStreamToFile(bis, clientFile);
-                    System.out.println("File: " + file + " updated ");
-                } catch (Exception ex) {
-                    Utils.registerException(ex);
+                File clientFile = new File(minecraftFolder, file);
+                if (!map.get(file).equals(FileChecksum.FileDifference.ONLY_EXISTS_IN_CLIENT)) {
+                    try{
+                        progressionFrame.setProcessName("Downloading " + clientFile.getName());
+                        System.out.println("Trying to download: " + file);
+                        BufferedInputStream bis = new BufferedInputStream(new URL(UrlEscapers.urlFragmentEscaper().escape(Main.serverURL + file)).openStream());
+                        FileUtils.copyInputStreamToFile(bis, clientFile);
+                        System.out.println("File: " + file + " updated ");
+                    } catch (Exception ex) {
+                        Utils.registerException(ex);
+                    }
+                } else {
+                    if (clientFile.exists()) {
+                        clientFile.delete();
+                        System.out.println("File: " + file + " deleted ");
+                    }
                 }
             }
         }
+
         progressionFrame.dispose();
-        org.tlauncher.tlauncher.rmo.Bootstrapper.main(args);
+
+        if (localConfig.isUseTlauncher())
+            org.tlauncher.tlauncher.rmo.Bootstrapper.main(args);
+
+        if (localConfig.getCustomLauncher() != null && !"".equals(localConfig.getCustomLauncher())) {
+            try {
+                File file = new File(localConfig.getCustomLauncher());
+                if (! file.exists()) {
+                    throw new IllegalArgumentException("The file " + localConfig.getCustomLauncher() + " does not exist");
+                }
+                Process p = Runtime.getRuntime().exec(file.getAbsolutePath());
+            } catch (Exception ex) {
+                Utils.registerException(ex);
+            }
+        }
     }
 }
