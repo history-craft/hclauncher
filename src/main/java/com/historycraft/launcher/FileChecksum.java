@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.*;
 import java.lang.reflect.Type;
@@ -12,6 +14,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class FileChecksum {
+
+    private static final Logger log = LogManager.getLogger(FileChecksum.class);
 
     public enum FileDifference{
         CHANGED,
@@ -67,7 +71,7 @@ public class FileChecksum {
 
     public Map<String, Object> verifyFolder(File folder) {
         Map<String, Object> map = new HashMap<>();
-       // System.out.println("Verify folder " + folder);
+       // log.info("Verify folder " + folder);
         if (folder.exists()) {
             for (File file: folder.listFiles()) {
                 if (file.isDirectory()) {
@@ -81,7 +85,7 @@ public class FileChecksum {
                 }
             }
         } else {
-            //System.out.println("Folder " + folder + " not exists");
+            //log.info("Folder " + folder + " not exists");
         }
         return map;
     }
@@ -106,9 +110,11 @@ public class FileChecksum {
 
                 if (client == null || !client.containsKey(file)) {
                     differences.put(parentFolder + "/" + file, FileDifference.ONLY_EXISTS_IN_SERVER);
+                    log.info(" {} ONLY_EXISTS_IN_SERVER", parentFolder + "/" + file);
                     continue;
                 } else if (!serverValue.equals(clientValue)) {
                     differences.put(parentFolder + "/" + file, FileDifference.CHANGED);
+                    log.info(" {} CHANGED sha256 server{} sha256 client {} ", parentFolder + "/" + file, serverValue, clientValue);
                 }
             } else {
                 Map<String, Object> serverMap = (Map<String, Object>) serverValue;
@@ -120,6 +126,7 @@ public class FileChecksum {
         if (client != null) {
             for(String file: client.keySet()) {
                 if (!server.containsKey(file)) {
+                    log.info(" {} ONLY_EXISTS_IN_CLIENT", parentFolder + "/" + file);
                     differences.put(parentFolder + "/" + file, FileDifference.ONLY_EXISTS_IN_CLIENT);
                     continue;
                 }

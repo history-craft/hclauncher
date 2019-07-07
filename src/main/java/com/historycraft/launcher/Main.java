@@ -6,16 +6,18 @@ import com.google.common.net.UrlEscapers;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.commons.io.FileUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import javax.print.attribute.standard.DialogTypeSelection;
 import javax.swing.*;
 import java.awt.*;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileReader;
 import java.io.PrintWriter;
+import java.net.Authenticator;
+import java.net.PasswordAuthentication;
 import java.net.URL;
-import java.util.Calendar;
 import java.util.Map;
 
 public class Main {
@@ -25,19 +27,19 @@ public class Main {
     public static File minecraftFolder = new File(Main.appDatFolder, ".minecraft");
    // public static String urlMinecraft = "https://dl.dropboxusercontent.com/s/nfnzz8j56xoj9t0/.minecraft.zip";
     public static String[] folderToCheck = new String [] {"scripts", "mods", "config", "resourcepacks", "resources"};
-    public static String serverURL = "http://167.86.122.133:8080/";
     public static ConfigLauncher configLauncher;
     public static ProgressionFrame progressionFrame;
+    private static final Logger log = LogManager.getLogger(Main.class);
 
     public static void main(String[] args) {
-
+        log.info("-------------starting the launcher--------------");
         if (args.length >= 2) {
-            System.out.println("Doing server stuffs");
+            log.info("Doing server stuffs");
             File serverFolder = new File(args[1]);
             FileChecksum fServer = new FileChecksum(serverFolder);
-            System.out.println("Generating checksum");
+            log.info("Generating checksum");
             fServer.saveJsonFile();
-            System.out.println("Checksum successfully generated");
+            log.info("Checksum successfully generated");
             return;
         }
 
@@ -46,33 +48,41 @@ public class Main {
         try{
             File folderConfig = new File(appDatFolder, ".hclauncher");
             if (!folderConfig.exists()) {
+                log.info("Folder {} not found, let's create a new one", folderConfig);
                 folderConfig.mkdirs();
             }
+
             File configFile = new File(folderConfig, "hclauncher.json");
             GsonBuilder gsonBuilder = new GsonBuilder();
             gsonBuilder.setPrettyPrinting();
             Gson gson = gsonBuilder.create();
 
             if (configFile.exists()) {
+                log.info("configFile found");
                 localConfig = gson.fromJson(new FileReader(configFile), LocalConfig.class);
+                log.info("configFile loaded successfully");
             } else {
+                log.info("configFile not found");
                 localConfig = new LocalConfig();
                 int dialogResult = JOptionPane.showConfirmDialog (null, "Do you want to use tlauncher?","Warning",JOptionPane.YES_NO_OPTION);
                 localConfig.setUseTlauncher(dialogResult == JOptionPane.YES_OPTION);
                 if (!localConfig.isUseTlauncher()){
+                    log.info("Selected to use custom launcher");
                     FileDialog dialog = new FileDialog((Frame)null, "Select Minecraft launcher");
                     dialog.setMode(FileDialog.LOAD);
                     dialog.setVisible(true);
                     localConfig.setCustomLauncher(new File(dialog.getDirectory(), dialog.getFile()).getAbsolutePath());
                     dialog.dispose();
+                    log.info("Custom launcher folder is {}", localConfig);
                 }
 
                 PrintWriter writer = new PrintWriter(configFile);
                 writer.print(gson.toJson(localConfig, LocalConfig.class));
                 writer.close();
+                log.info("successfully wrote local config file");
             }
         } catch (Exception ex) {
-            Utils.registerException(ex);
+            log.error("A error happened in local config file ", ex);
         }
 
         progressionFrame = new ProgressionFrame();
@@ -82,8 +92,10 @@ public class Main {
         progressionFrame.setMaximum(2);
         progressionFrame.incrementValue();
 
+        log.info("Downloading launcher-config.json");
+
         try{
-            BufferedInputStream bis = new BufferedInputStream(new URL(Main.serverURL + "/launcher-config.json").openStream());
+            BufferedInputStream bis = new BufferedInputStream(Utils.getConnection("/launcher-config.json"));
             GsonBuilder gsonBuilder = new GsonBuilder();
             gsonBuilder.setPrettyPrinting();
             Gson gson = gsonBuilder.create();
@@ -106,11 +118,11 @@ public class Main {
             return;
         }
 
-        System.out.println("Doing client stuffs");
+        log.info("Doing client stuffs");
 
         File modsJson = new File(minecraftFolder, "mods.json");
         try{
-            BufferedInputStream bis = new BufferedInputStream(new URL(Main.serverURL + "/mods.json").openStream());
+            BufferedInputStream bis = new BufferedInputStream(Utils.getConnection("/mods.json"));
             FileUtils.copyInputStreamToFile(bis, modsJson);
         } catch (Exception ex) {
             Utils.registerException(ex);
@@ -121,6 +133,8 @@ public class Main {
             FileChecksum fileChecksum = new FileChecksum(minecraftFolder);
 
             Map<String, FileChecksum.FileDifference> map = FileChecksum.compareJsonFile(fileChecksum.loadJsonFile(), fileChecksum.generate());
+
+            log.info("{} different files found", map.keySet().size());
 
             progressionFrame.setProcessName("Download modpack files");
             Main.progressionFrame.reset();
@@ -136,23 +150,24 @@ public class Main {
                     }
                 }
                 if (found) {
+                   // log.debug("File {} skipped", file);
                     continue;
                 }
                 File clientFile = new File(minecraftFolder, file);
                 if (!map.get(file).equals(FileChecksum.FileDifference.ONLY_EXISTS_IN_CLIENT)) {
                     try{
                         progressionFrame.setProcessName("Downloading " + clientFile.getName());
-                        System.out.println("Trying to download: " + file);
-                        BufferedInputStream bis = new BufferedInputStream(new URL(UrlEscapers.urlFragmentEscaper().escape(Main.serverURL + file)).openStream());
+                        log.info("Trying to download: {}", file);
+                        BufferedInputStream bis = new BufferedInputStream(Utils.getConnection(UrlEscapers.urlFragmentEscaper().escape(file)));
                         FileUtils.copyInputStreamToFile(bis, clientFile);
-                        System.out.println("File: " + file + " updated ");
+                        log.info("File: {} updated ", file);
                     } catch (Exception ex) {
                         Utils.registerException(ex);
                     }
                 } else {
                     if (clientFile.exists()) {
                         clientFile.delete();
-                        System.out.println("File: " + file + " deleted ");
+                        log.info("File: {} deleted ", file);
                     }
                 }
             }
@@ -161,6 +176,7 @@ public class Main {
         progressionFrame.dispose();
 
         if (localConfig.isUseTlauncher())
+            log.info("opening tlauncher");
             org.tlauncher.tlauncher.rmo.Bootstrapper.main(args);
 
         if (localConfig.getCustomLauncher() != null && !"".equals(localConfig.getCustomLauncher())) {
@@ -169,6 +185,7 @@ public class Main {
                 if (! file.exists()) {
                     throw new IllegalArgumentException("The file " + localConfig.getCustomLauncher() + " does not exist");
                 }
+                log.info("opening {}", file.getAbsolutePath());
                 Process p = Runtime.getRuntime().exec(file.getAbsolutePath());
             } catch (Exception ex) {
                 Utils.registerException(ex);

@@ -2,25 +2,26 @@ package com.historycraft.launcher;
 
 import net.lingala.zip4j.ZipFile;
 import org.apache.commons.io.FileUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import javax.swing.*;
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
 public class MinecraftDownloader {
 
+    private static final Logger log = LogManager.getLogger(MinecraftDownloader.class);
+
     public File tempMines = new File(Main.tempFolder, ".minecraft.zip");
 
     public void extract() throws Exception {
         if (Main.minecraftFolder.exists()) {
-            System.out.println("Minecraft folder exists, skip extract client");
+            log.info("Minecraft folder exists, skip extract client");
             return;
         }
 
@@ -28,7 +29,7 @@ public class MinecraftDownloader {
         Main.progressionFrame.reset();
         Main.progressionFrame.setMaximum(2);
 
-        System.out.println("Extracting folders");
+        log.info("Extracting folders");
         ZipFile zipFile = new ZipFile(tempMines);
         zipFile.extractAll(Main.minecraftFolder.getAbsolutePath());
 
@@ -39,7 +40,7 @@ public class MinecraftDownloader {
     public void configureLauncher() throws Exception {
         File tlauncherConfigFolder = new File(Main.appDatFolder, ".tlauncher");
         if (tlauncherConfigFolder.exists()) {
-            System.out.println("Launcher config exists");
+            log.info("Launcher config exists");
             return;
         }
         tlauncherConfigFolder.mkdir();
@@ -81,17 +82,17 @@ public class MinecraftDownloader {
 
     public void download() throws Exception {
         if (Main.minecraftFolder.exists()) {
-            System.out.println("Minecraft folder exists, skip download client");
+            log.info("Minecraft folder exists, skip download client");
             return;
         }
 
         Main.progressionFrame.setProcessName("Download minecraft");
         Main.progressionFrame.reset();
 
-        System.out.println("Configuring minecraft client folder");
+        log.info("Configuring minecraft client folder");
 
         if (!tempMines.exists()) {
-            System.out.println("minecraft found in temp folder");
+            log.info("minecraft found in temp folder");
             tempMines.delete();
         }
 
@@ -106,8 +107,8 @@ public class MinecraftDownloader {
 
         Main.progressionFrame.setMaximum(Utils.getFileSize(urlMines));
 
-        System.out.println("downloading minecraft");
+        log.info("downloading minecraft");
         FileUtils.copyInputStreamToFile(pmis, tempMines);
-        System.out.println("Download ended");
+        log.info("Download ended");
     }
 }
